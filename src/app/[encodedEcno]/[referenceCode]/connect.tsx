@@ -10,6 +10,7 @@ import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Clock, RefreshCw, Send, ArrowRight, ArrowLeft } from 'lucide-react';
 import Cookies from 'js-cookie';
+import { useGeolocated } from 'react-geolocated';
 import { useRouter, useParams } from 'next/navigation';
 import CHIT_API from './config';
 import LeftBanner from './LeftBanner';
@@ -17,37 +18,22 @@ import SecureQRGenerator from './SecureQRGenerator';
 import WifiStatus from './hooks/Wifistatus';
 import { SkeletonLoader } from './LoadingStates';
 
-// Dynamically import heavy components
-const QRCode = dynamic(
-  () => import('qrcode.react').then((mod) => mod.QRCodeSVG),
-  {
-    loading: () => <div>Loading QR Code...</div>,
-    ssr: false,
-  }
-);
+// Dynamically import components (keeping your existing imports)
+const QRCode = dynamic(() => import('qrcode.react').then((mod) => mod.QRCodeSVG), {
+  loading: () => <div>Loading QR Code...</div>,
+  ssr: false,
+});
 
 const Step1 = dynamic(() => import('./Step1'), {
-  loading: () => (
-    <div className="animate-pulse">
-      <SkeletonLoader />
-    </div>
-  ),
+  loading: () => <div className="animate-pulse"><SkeletonLoader /></div>,
 });
 
 const Step2 = dynamic(() => import('./Step2'), {
-  loading: () => (
-    <div className="animate-pulse">
-      <SkeletonLoader />
-    </div>
-  ),
+  loading: () => <div className="animate-pulse"><SkeletonLoader /></div>,
 });
 
 const Step3 = dynamic(() => import('./Step3'), {
-  loading: () => (
-    <div className="animate-pulse">
-      <SkeletonLoader />
-    </div>
-  ),
+  loading: () => <div className="animate-pulse"><SkeletonLoader /></div>,
 });
 
 interface Notification {
@@ -60,6 +46,17 @@ interface Notification {
 interface URLParams {
   encodedEcno?: string;
   referenceCode?: string;
+}
+interface LocationData {
+  locationName: string;
+  ip: string;
+}
+
+interface LocationState {
+  isLoading: boolean;
+  showSuccess: boolean;
+  showError: boolean;
+  data: LocationData | null;
 }
 
 interface FormState {
@@ -112,7 +109,6 @@ export default function MultiStepForm() {
   const router = useRouter();
   const params = useParams();
   const dispatch = useDispatch();
-  const [urlParams, setUrlParams] = useState<URLParams>({});
   const [isLoading, setIsLoading] = useState(true);
   const [step, setStep] = useState(1);
   const [showOtpPopup, setShowOtpPopup] = useState(false);
@@ -131,6 +127,14 @@ export default function MultiStepForm() {
   );
   const [mobileExists, setMobileExists] = useState(false);
   const [isPendingStatus, setIsPendingStatus] = useState(false);
+  const [urlParams, setUrlParams] = useState({ encodedEcno: '', referenceCode: '' });
+  const [locationState, setLocationState] = useState<LocationState>({
+    isLoading: true,
+    showSuccess: false,
+    showError: false,
+    data: null
+  });
+  const [isFormDisabled, setIsFormDisabled] = useState(true);
 
   const otpInputRef = useRef<HTMLInputElement>(null);
   const formData = useSelector((state: RootState) => state.form);
@@ -187,6 +191,128 @@ export default function MultiStepForm() {
     }
     return isValid;
   }, [step, formData, mobileExists, isPendingStatus]);
+
+  const { coords, isGeolocationEnabled } = useGeolocated({
+    positionOptions: {
+      enableHighAccuracy: true,
+      timeout: 5000,
+      maximumAge: 0,
+    },
+    userDecisionTimeout: 5000,
+    watchLocationPermissionChange: true,
+    onError: (error) => {
+      console.error('Geolocation error:', error);
+      addNotification('Failed to get location. Please enable location services.', 'error');
+      setLocationState(prev => ({
+        ...prev,
+        isLoading: false,
+        showError: true
+      }));
+      setIsFormDisabled(true);
+    }
+  });
+
+  // Improved decoding function
+  const decodeMultipleTimes = useCallback((encodedText: string, times: number): string => {
+    let decoded = encodedText;
+    try {
+      for (let i = 0; i < times; i++) {
+        decoded = decodeURIComponent(atob(decoded));
+      }
+      return decoded;
+    } catch (error) {
+      console.error('Decoding error:', error);
+      throw new Error('Failed to decode ECNO');
+    }
+  }, []);
+
+  // Enhanced location data update function
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updateLocationData = useCallback(async (locationData: any): Promise<boolean> => {
+    try {
+      if (!urlParams.encodedEcno) {
+        throw new Error('ECNO is missing');
+      }
+  
+      const decodedEcno = decodeMultipleTimes(urlParams.encodedEcno, 5);
+      console.log('Decoded ecno:', decodedEcno);     
+      
+      const payload = {
+        ecno: decodedEcno,
+        location_name: locationData.locationName,
+        referenceCode: urlParams.referenceCode,
+      };
+  
+      const response = await axios.post(`${CHIT_API}/store-location`, payload);
+      
+      if (response.status === 200) {
+        addNotification('Location updated successfully', 'success');
+        setLocationState(prev => ({
+          ...prev,
+          showSuccess: true,
+          data: locationData
+        }));
+        setIsFormDisabled(false);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error updating location:', error);
+      addNotification('Failed to update location data', 'error');
+      setLocationState(prev => ({
+        ...prev,
+        showError: true
+      }));
+      setIsFormDisabled(true);
+      return false;
+    }
+  }, [urlParams.encodedEcno, urlParams.referenceCode, decodeMultipleTimes]);
+  
+
+  // Improved location and IP fetching
+  const getLocationAndIP = useCallback(async (latitude: number, longitude: number) => {
+    try {
+      const [locationResponse, ipResponse] = await Promise.all([
+        axios.get(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`
+        ),
+        axios.get('https://api.ipify.org?format=json')
+      ]);
+
+      const address = locationResponse.data.address;
+      let locationString = '';
+
+      if (address.suburb) locationString += address.suburb;
+      if (address.city_district) locationString += (locationString ? ', ' : '') + address.city_district;
+      if (address.city) locationString += (locationString ? ', ' : '') + address.city;
+
+      const locationData = {
+        locationName: locationString || 'Unknown Location',
+        ip: ipResponse.data.ip
+      };
+
+      await updateLocationData(locationData);
+      return locationData;
+
+    } catch (error) {
+      console.error('Error getting location:', error);
+      setLocationState(prev => ({
+        ...prev,
+        isLoading: false,
+        showError: true
+      }));
+      setIsFormDisabled(true);
+      addNotification('Failed to get location information', 'error');
+      return null;
+    }
+  }, [updateLocationData]);
+
+  // Enhanced location effect
+  useEffect(() => {
+    if (coords && isGeolocationEnabled) {
+      getLocationAndIP(coords.latitude, coords.longitude);
+    }
+  }, [coords, isGeolocationEnabled, getLocationAndIP]);
 
   // Separate effect for validation state updates
   useEffect(() => {
@@ -291,61 +417,65 @@ export default function MultiStepForm() {
     }, 5000);
   };
 
-  const decodeMultipleTimes = (encodedText: string, times: number): string => {
-    let decoded = encodedText;
-    try {
-        for (let i = 0; i < times; i++) {
-            // Using decodeURIComponent to properly handle encoded characters
-            decoded = decodeURIComponent(atob(decoded));
-        }
-        return decoded;
-    } catch (error) {
-        console.error('Decoding error:', error);
-        throw new Error('Failed to decode ECNO');
-    }
-};
+//   const decodeMultipleTimes = (encodedText: string, times: number): string => {
+//     let decoded = encodedText;
+//     try {
+//         for (let i = 0; i < times; i++) {
+//             // Using decodeURIComponent to properly handle encoded characters
+//             decoded = decodeURIComponent(atob(decoded));
+//         }
+//         return decoded;
+//     } catch (error) {
+//         console.error('Decoding error:', error);
+//         throw new Error('Failed to decode ECNO');
+//     }
+// };
   
   // Updated handleSubmit function
   const handleSubmit = async () => {
     if (isSubmitting) return;
-  
+
+    if (!locationState.data) {
+      addNotification('Location data is required. Please enable location services.', 'error');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      // Decode the ECNO 5 times before submission
+      const locationUpdateSuccess = await updateLocationData(locationState.data);
+      if (!locationUpdateSuccess) {
+        throw new Error('Failed to store location data');
+      }
       const decodedEcno = decodeMultipleTimes(urlParams.encodedEcno ?? "", 5);
-
       
-      // Log the decoded ECNO for verification
-      console.log('Original ECNO:', urlParams.encodedEcno);
-      console.log('Decoded ECNO:', decodedEcno);
-  
       const submitData = {
         ...formData,
         status: 'P',
-        ecno: decodedEcno, // Use the decoded ECNO
+        ecno: decodedEcno,
         referenceCode: urlParams.referenceCode,
+        location_name: locationState.data.locationName,
+        ip_address: locationState.data.ip
       };
-  
+
       // Rest of your existing validation logic
       if (!submitData.customerTitle || 
-          !submitData.customerName || 
-          !submitData.mobileNo || 
-          !submitData.email || 
-          !submitData.CustomerType || 
-          !submitData.doorNo || 
-          !submitData.street || 
-          !submitData.pinCode || 
-          !submitData.ecno || 
-          !submitData.referenceCode) {
-        throw new Error('Required fields are missing');
-      }
-  
-      // Make the API call with decoded ECNO
+        !submitData.customerName || 
+        !submitData.mobileNo || 
+        !submitData.email || 
+        !submitData.CustomerType || 
+        !submitData.doorNo || 
+        !submitData.street || 
+        !submitData.pinCode || 
+        !submitData.ecno || 
+        !submitData.referenceCode) {
+      throw new Error('Required fields are missing');
+    }
+
+      
       const response = await axios.post(`${CHIT_API}/customer`, submitData, {
         headers: { 'Content-Type': 'application/json' },
       });
-  
-      // Rest of your existing success handling
+
       if (response.status === 200) {
         if (response.data.error) {
           throw new Error(response.data.error);
@@ -363,7 +493,7 @@ export default function MultiStepForm() {
           otpVerified: false,
           submissionTimestamp: Date.now(),
         };
-  
+
         setCookieData({
           data: formData,
           timestamp: Date.now(),

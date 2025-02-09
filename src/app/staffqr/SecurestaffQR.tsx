@@ -27,6 +27,7 @@ interface SecureQRGeneratorProps {
   onExpire?: () => void;
   locationData?: LocationData | null;
   startTimer: boolean;
+  referenceCode: string;
 }
 
 const SecureQRGenerator = memo(({ 
@@ -35,7 +36,8 @@ const SecureQRGenerator = memo(({
   onSuccess, 
   onExpire, 
   locationData, 
-  startTimer 
+  startTimer,
+  referenceCode 
 }: SecureQRGeneratorProps) => {
   const [timeLeft, setTimeLeft] = useState(90);
   const [qrData, setQrData] = useState<{
@@ -46,7 +48,6 @@ const SecureQRGenerator = memo(({
     location?: LocationData | null;
   } | null>(null);
 
-  // Move the encoding functions outside of effects
   const encodeMultipleTimes = useCallback((text: string, times: number): string => {
     let encoded = text;
     try {
@@ -68,50 +69,47 @@ const SecureQRGenerator = memo(({
       .slice(0, 8);
   }, []);
 
-  // Generate QR data on mount or when dependencies change
+  // Generate QR data when component mounts or when dependencies change
   useEffect(() => {
-    const generateAndSetQRData = () => {
-      try {
-        const referenceCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const encodedEcno = encodeMultipleTimes(ecno, 5);
-        const randomString = generateSecureRandomString();
-        const sessionId = `${ecno}-${Date.now()}-${randomString}`;
-        const verificationUrl = `https://qrcodemk.netlify.app/${encodedEcno}/${referenceCode}`;
+    if (!referenceCode || !ecno) return;
 
-        const newQrData = {
-          url: verificationUrl,
-          ecno,
-          encodedEcno,
-          referenceCode,
-          sessionId,
-          timestamp: new Date().toISOString(),
-          location: locationData || undefined,
-        };
+    try {
+      const encodedEcno = encodeMultipleTimes(ecno, 5);
+      const randomString = generateSecureRandomString();
+      const sessionId = `${ecno}-${Date.now()}-${randomString}`;
+      const verificationUrl = `https://marketingqr.spacetextiles.net/${encodedEcno}/${referenceCode}`;
 
-        setQrData({
-          url: verificationUrl,
-          referenceCode,
-          ecno,
-          encodedEcno,
-          location: locationData,
-        });
+      const newQrData = {
+        url: verificationUrl,
+        ecno,
+        encodedEcno,
+        referenceCode,
+        sessionId,
+        timestamp: new Date().toISOString(),
+        location: locationData || undefined,
+      };
 
-        if (onSuccess) {
-          onSuccess(newQrData);
-        }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      } catch (error) {
-        if (onError) {
-          onError('Failed to generate secure QR code');
-        }
-        setQrData(null);
+      setQrData({
+        url: verificationUrl,
+        referenceCode,
+        ecno,
+        encodedEcno,
+        location: locationData,
+      });
+
+      if (onSuccess) {
+        onSuccess(newQrData);
       }
-    };
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (error) {
+      if (onError) {
+        onError('Failed to generate secure QR code');
+      }
+      setQrData(null);
+    }
+  }, [ecno, referenceCode, locationData, onError, onSuccess, encodeMultipleTimes, generateSecureRandomString]);
 
-    generateAndSetQRData();
-  }, [ecno, locationData, onError, onSuccess, encodeMultipleTimes, generateSecureRandomString]);
-
-  // Handle timer separately
+  // Handle timer in a separate effect
   useEffect(() => {
     let timer: NodeJS.Timeout;
     
@@ -166,7 +164,7 @@ const SecureQRGenerator = memo(({
           </div>
         </div>
       </div>
-
+{/* <span>value={qrData.url}</span> */}
       <div className="text-center">
         <p className="text-sm text-gray-600 mb-2">Scan to verify</p>
       </div>
