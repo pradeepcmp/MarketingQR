@@ -146,7 +146,7 @@ const MarketingDashboard: React.FC = () => {
     setDailyActivity(activities);
   };
   const getAnalytics = (): AnalyticItem[] => {
-    const totalEmployees = marketingData.length;
+    const totalEmployees = _.uniqBy(marketingData.filter(item => item.division), 'ecno').length;
     const uniqueDivisions = _.uniqBy(marketingData.filter(item => item.division), 'division').length;
     const uniqueLocations = _.uniqBy(marketingData.filter(item => item.location), 'location').length;
     const uniqueBranches = _.uniqBy(marketingData.filter(item => item.branch), 'branch').length;
