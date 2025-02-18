@@ -16,6 +16,7 @@ import {
   ArrowUpRight, ArrowDownRight, Filter,
   Activity, TrendingUp
 } from 'lucide-react';
+import PrivateRoute from '../protectedRoute'
 import Image from 'next/image'
 import _ from 'lodash';
 
@@ -329,6 +330,7 @@ const MarketingDashboard: React.FC = () => {
   }
 
   return (
+    <PrivateRoute>
     <div className="min-h-screen bg-gray-50 p-8">
      <div className="relative h-20 sm:h-20 lg:h-20 w-full">
         <Image src="/SPACE LOGO 3D 03.png" alt="Company Logo" fill className="object-contain" priority/>
@@ -625,6 +627,7 @@ const MarketingDashboard: React.FC = () => {
         </CardContent>
       </Card>
     </div>
+    </PrivateRoute>
   );
 };
 

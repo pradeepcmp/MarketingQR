@@ -19,9 +19,11 @@ export interface Option {
   }
   export interface CombinedData {
     userRoles: Option[];
-    concerns: Option[];
-    divisions: Option[];
-    branches: Option[];
     portalNames: Option[];
     screens: Option[];
+    concerns: Option[];
+    divisions: Option[];
+    divisionBranches: {
+      [key: string]: Option[];
+    };
   }

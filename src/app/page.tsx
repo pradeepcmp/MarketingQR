@@ -216,8 +216,22 @@ const AuthPage = () => {
   // Update filtered branches when division changes
   useEffect(() => {
     if (allData && watchDivision) {
-      const filteredBranches = allData.branches;
-      setBranches(filteredBranches);
+      const divisionCode = watchDivision;
+      // Find the selected division
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const selectedDivision = allData.divisions.find(
+        (div: Option) => div.value === divisionCode
+      );
+      
+      // Get branches for the selected division from divisionBranches
+      const divisionBranches = allData.divisionBranches[divisionCode] || [];
+      
+      // Update branches state
+      setBranches(divisionBranches);
+      setValue('branch', ''); // Reset branch selection
+    } else {
+      // If no division is selected, reset branches
+      setBranches([]);
       setValue('branch', '');
     }
   }, [watchDivision, allData, setValue]);
@@ -536,10 +550,10 @@ const AuthPage = () => {
                       disabled={!watchDivision || isFormDisabled}
                     >
                       <option value="">Select Branch</option>
-                      {branches.map((branch) => (
-                        <option key={branch.value} value={branch.value}>
-                          {branch.label}
-                        </option>
+                         {branches.map((branch) => (
+                         <option key={branch.value} value={branch.value}>
+                                     {branch.label}
+                              </option>
                       ))}
                     </select>
                     {errors.branch && (
