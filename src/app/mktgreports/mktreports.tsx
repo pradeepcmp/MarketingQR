@@ -16,7 +16,7 @@ import {
   ArrowUpRight, ArrowDownRight, Filter,
   Activity, TrendingUp
 } from 'lucide-react';
-import PrivateRoute from '../protectedRoute'
+// import PrivateRoute from '../protectedRoute'
 import Image from 'next/image'
 import _ from 'lodash';
 
@@ -627,7 +627,6 @@ const MarketingDashboard: React.FC = () => {
         </CardContent>
       </Card>
     </div>
-    {/* </PrivateRoute> */}
   );
 };
 
