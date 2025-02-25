@@ -472,7 +472,7 @@ export default function MultiStepForm() {
     }
 
       
-      const response = await axios.post(`${CHIT_API}/customer`, submitData, {
+      const response = await axios.post(`${CHIT_API}/mkt_customer`, submitData, {
         headers: { 'Content-Type': 'application/json' },
       });
 
@@ -549,7 +549,7 @@ export default function MultiStepForm() {
     setIsVerifying(true);
     try {
       const response = await axios.post(
-        `${CHIT_API}/verify_otp`,
+        `${CHIT_API}/mkt_verify_otp`,
         {
           OTP: otp,
           mobileNo: formData.mobileNo,
