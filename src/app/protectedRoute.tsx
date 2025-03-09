@@ -1,9 +1,7 @@
-"use strict";
-
+"use client"
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from './useAuth';
-import { isPathAllowed, isAlwaysAllowedRoute } from './allowedRoutes';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -13,44 +11,70 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const router = useRouter();
   const { isAuthenticated, allowedScreens, isLoading } = useAuth();
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const lastCheckedPath = useRef<string>('');
+  const authCheckTimeout = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const checkAuthorization = useCallback(() => {
-    if (isLoading) return;
-
-    if (!isAuthenticated) {
-      router.push('/');
-      return;
+    // Clear any pending checks
+    if (authCheckTimeout.current) {
+      clearTimeout(authCheckTimeout.current);
     }
 
     const currentPath = window.location.pathname;
-    
-    // Check if current path is in always allowed routes
-    if (isAlwaysAllowedRoute(currentPath)) {
+
+    // Skip if we've already checked this path and nothing has changed
+    if (
+      currentPath === lastCheckedPath.current && 
+      isAuthorized && 
+      !isLoading
+    ) {
+      return;
+    }
+
+    // Update the last checked path
+    lastCheckedPath.current = currentPath;
+
+    // Handle public routes
+    if (currentPath === '/') {
       setIsAuthorized(true);
       return;
     }
 
-    // Special handling for staffqr
-    if (currentPath === '/staffqr' && isAuthenticated) {
-      setIsAuthorized(true);
-      return;
-    }
+    // Set a timeout to ensure we have the latest auth state
+    authCheckTimeout.current = setTimeout(() => {
+      if (!isAuthenticated && !isLoading) {
+        router.push('/');
+        return;
+      }
 
-    // Check if path is allowed based on user permissions
-    if (isPathAllowed(currentPath, allowedScreens, isAuthenticated)) {
-      setIsAuthorized(true);
-    } else {
-      router.push('/unauthorized');
-    }
-  }, [isAuthenticated, isLoading, allowedScreens, router]);
-
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      checkAuthorization();
+      const isPathAllowed = allowedScreens.some(screen => {
+        // Exact match
+        if (screen === currentPath) return true;
+        // Case-insensitive match
+        if (screen.toLowerCase() === currentPath.toLowerCase()) return true;
+        return false;
+      });
+console.info("validpath",isPathAllowed)
+      if (isPathAllowed) {
+        setIsAuthorized(true);
+      }
     }, 100);
 
-    return () => clearTimeout(timeoutId);
-  }, [checkAuthorization]);
+  }, [isAuthenticated, isLoading, allowedScreens, router, isAuthorized]);
+
+  // Initial check on mount and auth state changes
+  useEffect(() => {
+    checkAuthorization();
+  }, [checkAuthorization, isAuthenticated, isLoading, allowedScreens]);
+
+  // Cleanup timeouts
+  useEffect(() => {
+    return () => {
+      if (authCheckTimeout.current) {
+        clearTimeout(authCheckTimeout.current);
+      }
+    };
+  }, []);
 
   if (isLoading) {
     return (

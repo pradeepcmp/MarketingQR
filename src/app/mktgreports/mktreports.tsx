@@ -8,15 +8,18 @@ import {
 import { 
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
 } from "@/components/ui/table";
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Building2, Users, MapPin, Network, Search, 
   ArrowUpRight, ArrowDownRight, Filter,
-  Activity, TrendingUp
+  Activity, TrendingUp, LogOut
 } from 'lucide-react';
-// import PrivateRoute from '../protectedRoute'
+import PrivateRoute from '../protectedRoute'
+import Cookies from 'js-cookie';
 import Image from 'next/image'
 import _ from 'lodash';
 
@@ -73,6 +76,7 @@ const GRADIENTS = [
 ];
 
 const MarketingDashboard: React.FC = () => {
+  const router = useRouter();
   const [marketingData, setMarketingData] = useState<MarketingEmployee[]>([]);
   const [filteredData, setFilteredData] = useState<MarketingEmployee[]>([]);
   const [dailyActivity, setDailyActivity] = useState<DailyActivityData[]>([]);
@@ -118,7 +122,24 @@ const MarketingDashboard: React.FC = () => {
       setLoading(false);
     }
   };
-
+  const handleLogout = () => {
+    // Remove all cookies
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i];
+      const eqPos = cookie.indexOf('=');
+      const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+      document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+    }
+    
+    // Alternative way using js-cookie library
+    Object.keys(Cookies.get()).forEach(cookieName => {
+      Cookies.remove(cookieName);
+    });
+    
+    // Navigate to login page
+    router.push('./');
+  };
   const processDailyActivity = () => {
     const activities = _.chain(marketingData)
       .filter((item: MarketingEmployee) => 
@@ -330,11 +351,20 @@ const MarketingDashboard: React.FC = () => {
   }
 
   return (
-    // <PrivateRoute>
+    <PrivateRoute>
     <div className="min-h-screen bg-gray-50 p-8">
      <div className="relative h-20 sm:h-20 lg:h-20 w-full">
         <Image src="/SPACE LOGO 3D 03.png" alt="Company Logo" fill className="object-contain" priority/>
     </div>
+    <div className="absolute top-0 right-0 m-4">
+    <Button 
+      onClick={handleLogout}
+      className="flex items-center gap-2 bg-red-600 hover:bg-red-700"
+    >
+      <LogOut className="w-4 h-4" />
+      Logout
+    </Button>
+  </div>
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-blue-900 mb-2">Marketing Reports Dashboard</h1>
@@ -627,6 +657,7 @@ const MarketingDashboard: React.FC = () => {
         </CardContent>
       </Card>
     </div>
+    </PrivateRoute>
   );
 };
 
